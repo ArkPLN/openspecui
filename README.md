@@ -211,3 +211,11 @@ npm run test
 1. **Git 只读伴侣原则**：所有远程关联仓库统一克隆至 `~/.openspecui/repos/` 受控目录并标记为只读；Git 视图仅提供状态查看、Diff 检视与受控分支切换，不提供 Commit / Push 等破坏性操作。
 2. **局域网只读隔离**：当使用 `--host 0.0.0.0` 暴露局域网访问时，服务端强制开启 `readOnlyMode`，拦截 `tasks.md` 回写、工作区增删、目录浏览与分支切换等写接口。
 3. **本地目录边界校验**：`tasks.md` 写回与路径读取均经过路径规范化校验与 CSRF Token 验证，防止目录穿越与未授权跨源修改。
+
+---
+
+## 🤝 鸣谢 / Acknowledgements
+
+- 感谢 [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) 提供的规范驱动开发工作流标准。
+- 感谢 [LINUX DO](https://linux.do/) 社区对本项目开源交流与推广的支持。
+
