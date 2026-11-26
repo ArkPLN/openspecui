@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   aggregateWorkspaceChanges,
   applyTaskLineToggle,
+  compareSpecRequirementSnapshots,
   computeArtifactStates,
   computeChangeStage,
   parseDeltaSpecDiff,
@@ -265,5 +266,147 @@ describe('OpenSpec cross-repo aggregation & Delta diff', () => {
     expect(computeChangeStage(false, fullArts, { completed: 1, total: 3 })).toBe('in_progress');
     expect(computeChangeStage(false, fullArts, { completed: 3, total: 3 })).toBe('complete');
     expect(computeChangeStage(true, fullArts, { completed: 3, total: 3 })).toBe('archived');
+  });
+
+  it('compares spec requirement snapshots across created, added, modified, removed, and renamed states', () => {
+    const v1 = [
+      '# auth Specification',
+      '',
+      '## Purpose',
+      '认证基础能力',
+      '',
+      '## Requirements',
+      '',
+      '### Requirement: 账号密码登录',
+      'The system SHALL authenticate users with username and password.',
+      '',
+      '#### Scenario: 登录成功',
+      '- **WHEN** 用户名和密码校验通过',
+      '- **THEN** 签发访问令牌',
+      '',
+      '### Requirement: 旧版验证码校验',
+      'The system SHALL verify 4-digit SMS captcha.',
+    ].join('\n');
+
+    // 1. 首次创建
+    const created = compareSpecRequirementSnapshots(undefined, v1);
+    expect(created.operations).toEqual(['CREATED']);
+    expect(created.counts.created).toBe(2);
+    expect(created.changes.map((c) => c.name)).toEqual(['账号密码登录', '旧版验证码校验']);
+
+    // 2. 纯追加 + 修改正文不误判为移除
+    const v2 = [
+      '# auth Specification',
+      '',
+      '## Purpose',
+      '认证基础能力',
+      '',
+      '## Requirements',
+      '',
+      '### Requirement: 账号密码登录',
+      'The system SHALL authenticate users with username, password, and lockout policy.',
+      '',
+      '#### Scenario: 登录成功',
+      '- **WHEN** 用户名和密码校验通过',
+      '- **THEN** 签发访问令牌与刷新令牌',
+      '',
+      '### Requirement: 旧版验证码校验',
+      'The system SHALL verify 4-digit SMS captcha.',
+      '',
+      '### Requirement: 单点登录接入',
+      'The system SHALL support OIDC SSO login.',
+    ].join('\n');
+
+    const addedAndModified = compareSpecRequirementSnapshots(v1, v2);
+    expect(addedAndModified.operations).toEqual(['ADDED', 'MODIFIED']);
+    expect(addedAndModified.counts).toEqual({
+      created: 0,
+      added: 1,
+      modified: 1,
+      renamed: 0,
+      removed: 0,
+    });
+
+    // 3. 相似度自动识别重命名（中文 + 英文）且同时移除一条无关旧需求
+    const v3 = [
+      '# auth Specification',
+      '',
+      '## Purpose',
+      '认证基础能力',
+      '',
+      '## Requirements',
+      '',
+      '### Requirement: 用户名密码与锁定认证',
+      'The system SHALL authenticate users with username, password, and lockout policy.',
+      '',
+      '#### Scenario: 登录成功',
+      '- **WHEN** 用户名和密码校验通过',
+      '- **THEN** 签发访问令牌与刷新令牌',
+      '',
+      '### Requirement: 单点登录接入',
+      'The system SHALL support OIDC SSO login.',
+    ].join('\n');
+
+    const renamedAndRemoved = compareSpecRequirementSnapshots(v2, v3);
+    expect(renamedAndRemoved.operations).toEqual(['RENAMED', 'REMOVED']);
+    expect(renamedAndRemoved.counts).toEqual({
+      created: 0,
+      added: 0,
+      modified: 0,
+      renamed: 1,
+      removed: 1,
+    });
+    const renamedItem = renamedAndRemoved.changes.find((c) => c.operation === 'RENAMED')!;
+    expect(renamedItem.fromName).toBe('账号密码登录');
+    expect(renamedItem.name).toBe('用户名密码与锁定认证');
+    expect(renamedItem.matchSource).toBe('similarity');
+    expect(renamedItem.similarity).toBeGreaterThanOrEqual(55);
+    const removedItem = renamedAndRemoved.changes.find((c) => c.operation === 'REMOVED')!;
+    expect(removedItem.name).toBe('旧版验证码校验');
+
+    // 4. 同提交归档 Delta Spec 声明 RENAMED 时优先确定性匹配
+    const deltaRenamed = [
+      '## RENAMED Requirements',
+      '- FROM: `### Requirement: 单点登录接入`',
+      '- TO: `### Requirement: 企业 OIDC 单点登录`',
+    ].join('\n');
+    const v4 = v3
+      .replace('### Requirement: 单点登录接入', '### Requirement: 企业 OIDC 单点登录')
+      .replace('The system SHALL support OIDC SSO login.', 'Completely rewritten enterprise identity federation flow.');
+
+    const deltaMatched = compareSpecRequirementSnapshots(v3, v4, { deltaSpecsRaw: [deltaRenamed] });
+    expect(deltaMatched.operations).toEqual(['RENAMED']);
+    expect(deltaMatched.changes[0]).toEqual({
+      operation: 'RENAMED',
+      fromName: '单点登录接入',
+      name: '企业 OIDC 单点登录',
+      matchSource: 'delta',
+    });
+
+    // 5. 仅含模板固定词且业务语义完全不同时不得误判为重命名
+    const unrelatedOld = [
+      '## Requirements',
+      '### Requirement: 订单导出',
+      'The system SHALL export CSV.',
+      '- **WHEN** click export',
+      '- **THEN** download file',
+    ].join('\n');
+    const unrelatedNew = [
+      '## Requirements',
+      '### Requirement: 支付回调',
+      'The system SHALL verify signature.',
+      '- **WHEN** webhook arrives',
+      '- **THEN** update ledger',
+    ].join('\n');
+    const noFalseRename = compareSpecRequirementSnapshots(unrelatedOld, unrelatedNew);
+    expect(noFalseRename.operations).toEqual(['ADDED', 'REMOVED']);
+    expect(noFalseRename.counts.renamed).toBe(0);
+    expect(noFalseRename.counts.added).toBe(1);
+    expect(noFalseRename.counts.removed).toBe(1);
+
+    // 6. 仅修改 Purpose 不改 Requirement 时判定为 DOCS_UPDATED
+    const docsOnly = compareSpecRequirementSnapshots(v4, v4.replace('认证基础能力', '认证基础与企业登录能力'));
+    expect(docsOnly.operations).toEqual(['DOCS_UPDATED']);
+    expect(docsOnly.changes).toEqual([]);
   });
 });

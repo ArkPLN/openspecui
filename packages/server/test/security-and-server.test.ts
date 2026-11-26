@@ -230,4 +230,52 @@ describe('Workbench server HTTP & CSRF boundary', () => {
     });
     expect(checkoutRes.status).toBe(403);
   });
+
+  it('serves read-only spec history endpoint and blocks path traversal attempts', async () => {
+    const appHome = makeTempDir('osui-spec-api-home-');
+    const repoDir = makeTempDir('osui-spec-api-repo-');
+    const specDir = path.join(repoDir, 'openspec', 'specs', 'demo-cap');
+    fs.mkdirSync(specDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(specDir, 'spec.md'),
+      '# demo-cap Specification\n\n## Requirements\n\n### Requirement: Demo Rule\nThe system SHALL work.\n',
+      'utf8',
+    );
+
+    const server = await createWorkbenchServer({
+      port: 0,
+      host: '127.0.0.1',
+      appHomeDir: appHome,
+    });
+    servers.push(server);
+
+    const baseUrl = `http://127.0.0.1:${server.port}`;
+    const createRes = await fetch(`${baseUrl}/api/workspaces`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-OpenSpecUI-Token': server.csrfToken,
+      },
+      body: JSON.stringify({
+        name: 'spec-api-ws',
+        repos: [{ sourceType: 'local', localPath: repoDir, role: 'API', kind: 'hybrid' }],
+      }),
+    });
+    expect(createRes.status).toBe(200);
+    const ws = (await createRes.json()) as { id: string; repos: Array<{ id: string }> };
+    const repoId = ws.repos[0].id;
+
+    // 正常访问（非 Git 仓优雅降级）
+    const okRes = await fetch(`${baseUrl}/api/repos/${repoId}/specs/history?capabilityPath=demo-cap`);
+    expect(okRes.status).toBe(200);
+    const payload = (await okRes.json()) as { isGitRepo: boolean; capabilityPath: string };
+    expect(payload.isGitRepo).toBe(false);
+    expect(payload.capabilityPath).toBe('demo-cap');
+
+    // 拦截路径穿越
+    const traversalRes = await fetch(
+      `${baseUrl}/api/repos/${repoId}/specs/history?capabilityPath=${encodeURIComponent('../package.json')}`,
+    );
+    expect(traversalRes.status).toBe(403);
+  });
 });

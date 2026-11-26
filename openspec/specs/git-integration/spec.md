@@ -64,3 +64,33 @@ The system SHALL support manual and configurable periodic synchronization (`git 
 #### Scenario: 私有远程仓库鉴权失败或网络超时
 - **WHEN** 拉取私有远程仓库时本机未配置有效 SSH Key 或 Git 凭证导致鉴权失败或超时
 - **THEN** 系统在超时阈值内终止操作并返回明确的鉴权/网络错误提示，不挂起后台服务且保留上次可用的缓存视图
+
+### Requirement: 非 ASCII 与含引号 Git 文件路径 UTF-8 还原
+The system SHALL disable Git octal path quoting (`core.quotePath=false`) during repository inspection and SHALL decode C-style quoted/octal-escaped file paths across Git status, Diff output, and file-level commit history so that non-ASCII (such as Chinese) and space-containing paths display as their original UTF-8 relative paths.
+
+#### Scenario: 查看含中文目录与中文文件名的 Commit 或工作区 Diff
+- **WHEN** 某次提交或工作区改动包含非 ASCII 路径（例如 `sql/2026/20260922理论课堂/20261125线下收款登记权限补齐.sql`）
+- **THEN** 系统返回解码后的原始 UTF-8 相对路径 `sql/2026/20260922理论课堂/20261125线下收款登记权限补齐.sql` 作为文件条目标题，且 Diff 头部不显示八进制转义乱码或多余的双引号 `a/`、`b/` 前缀
+
+#### Scenario: 兼容含空格、特殊字符及旧式八进制转义的 Diff 与状态行
+- **WHEN** Git 状态输出、带引号的重命名 Diff 头（如 `"a/old name.md" "b/新 文件.md"`）或单边引号 Diff 头中出现双引号或 C 风格八进制字节序列（`\NNN`）
+- **THEN** 系统正确拆解左右路径、还原 UTF-8 字符并去除 `a/`、`b/` 前缀与外层引号，同时保持路径遍历安全校验对还原后路径的有效性
+
+### Requirement: Spec 文件历史追溯与 Requirement 语义演进分析
+The system SHALL inspect the Git commit history of a requested main spec file (`openspec/specs/<capability-path>/spec.md`, following renames via `--follow` and resolving external registered store roots when applicable) on demand, identifying the spec creator, deduplicating all contributors by normalized author email, and classifying each inspected revision into structured `Requirement` deltas (`CREATED`, `ADDED`, `MODIFIED`, `RENAMED`, `REMOVED`, or `DOCS_UPDATED`).
+
+#### Scenario: 追溯 Spec 创建者与全部贡献者并识别追加与移除
+- **WHEN** 客户端请求一个位于有效 Git 仓库内的主规范历史，该规范经历过初始创建提交 `C1`、新增两条需求并修改一条需求的提交 `C2`，以及删除一条废弃需求的提交 `C3`
+- **THEN** 系统返回 `C1` 的作者作为创建者，返回包含 `C1`、`C2`、`C3` 去重作者的贡献者汇总（按小写邮箱归一化并统计各自新增/修改/重命名/移除计数），并在逐次提交记录中分别列出 `C2` 追加与修改的 `Requirement` 标题清单以及 `C3` 被移除的 `Requirement` 标题清单
+
+#### Scenario: 自动识别 Requirement 重命名而非误判为移除加追加
+- **WHEN** 某次提交将已有 `Requirement` 标题重命名且正文语义高度相似（或同次提交内包含声明 `RENAMED` 的归档 Delta Spec `FROM:/TO:` 映射）
+- **THEN** 系统将该条变更归类为 `RENAMED` 并记录原名称、新名称与匹配来源/相似度，不再将其误判为“移除旧功能点 + 追加新功能点”
+
+#### Scenario: 非 Git 仓库或无历史记录时优雅降级
+- **WHEN** 目标主规范所在的本地目录或外部 Store 目录未初始化 `.git`，或该规范文件尚未纳入任何 Git 提交
+- **THEN** 系统返回明确的只读降级状态（标记非 Git 仓库或暂无提交历史）而不抛出未处理异常或阻塞主规范正文预览
+
+#### Scenario: 路径校验与远程只读缓存保护
+- **WHEN** 客户端传入非法 `capabilityPath`（如包含 `..` 或绝对路径）或查询通过 `--filter=blob:none` 克隆的远程仓库主规范历史
+- **THEN** 系统严格校验目标路径不得越界出解析后的 OpenSpec 规范根目录，并对单次快照对比的提交窗口设置上限（同时标注历史是否被截断）以避免全量历史拉取导致超时

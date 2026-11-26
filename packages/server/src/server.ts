@@ -20,6 +20,7 @@ import {
   CreateWorkspaceInputSchema,
   ScanDirectoryInputSchema,
   SetBranchPinInputSchema,
+  SpecHistoryQuerySchema,
   ToggleTaskInputSchema,
   UpdateIdeaInputSchema,
   UpdateWorkspaceInputSchema,
@@ -33,6 +34,7 @@ import { z } from 'zod';
 import {
   getRepoDiff,
   getRepoGitStatus,
+  getSpecEvolutionHistory,
   getWorkspaceGitTimeline,
   matchChangeToGitAcrossWorkspace,
   switchRepoBranch,
@@ -620,6 +622,21 @@ export async function createWorkbenchServer(
     }
     const target = query.target?.trim() || 'working-tree';
     return getRepoDiff(found.repo, target);
+  });
+
+  // 懒加载查询单个主规范（Spec）的作者、贡献者与 Requirement 级演进清单（只读）
+  app.get('/api/repos/:repoId/specs/history', async (request) => {
+    const { repoId } = request.params as { repoId: string };
+    const query = SpecHistoryQuerySchema.parse(request.query ?? {});
+    const found = registry.findRepoById(repoId);
+    if (!found) {
+      throw new SecurityError('仓库不存在', 404, 'REPO_NOT_FOUND');
+    }
+    const envInfo = await getEnvInfo();
+    return getSpecEvolutionHistory(found.repo, query.capabilityPath, {
+      envInfo,
+      limit: query.limit,
+    });
   });
 
   // 安全切换仓库当前工作区分支（受 CSRF 与 readOnlyMode 保护，禁止 -f 丢弃未提交改动）

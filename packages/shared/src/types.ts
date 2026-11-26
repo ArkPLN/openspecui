@@ -314,6 +314,109 @@ export interface MainSpecEntry {
   requirementCount: number;
 }
 
+/** 主规范演进操作类型 */
+export type SpecRequirementChangeKind =
+  | 'CREATED'
+  | 'ADDED'
+  | 'MODIFIED'
+  | 'RENAMED'
+  | 'REMOVED'
+  | 'DOCS_UPDATED';
+
+/** 单条 Requirement 在某次提交中的演进明细 */
+export interface SpecRequirementChangeItem {
+  /** 变更操作类型 */
+  operation: 'CREATED' | 'ADDED' | 'MODIFIED' | 'RENAMED' | 'REMOVED';
+  /** Requirement 标题（RENAMED 时为目标标题） */
+  name: string;
+  /** RENAMED 时的原 Requirement 标题 */
+  fromName?: string;
+  /** 重命名匹配来源（delta: 同提交归档 Delta Spec；similarity: 文本相似度） */
+  matchSource?: 'delta' | 'similarity';
+  /** 重命名文本相似度（0-100 百分比，仅 similarity 时提供） */
+  similarity?: number;
+}
+
+/** 单次提交的 Spec 语义演进条目 */
+export interface SpecRevisionEntry {
+  /** Commit SHA */
+  sha: string;
+  /** 短 SHA */
+  shortSha: string;
+  /** 提交作者显示名 */
+  authorName: string;
+  /** 提交作者邮箱 */
+  authorEmail: string;
+  /** 提交时间 ISO 字符串 */
+  committedAt: string;
+  /** 提交信息首行 */
+  subject: string;
+  /** 本次提交在仓库内的文件路径（反映 --follow 重命名迁移） */
+  filePathAtCommit: string;
+  /** 是否已完成快照拉取与 Requirement 语义对比 */
+  analyzed: boolean;
+  /** 本次提交涉及的语义动作集合 */
+  operations: SpecRequirementChangeKind[];
+  /** 本次提交的功能点变更清单 */
+  changes: SpecRequirementChangeItem[];
+  /** 功能点计数汇总 */
+  counts: {
+    created: number;
+    added: number;
+    modified: number;
+    renamed: number;
+    removed: number;
+  };
+}
+
+/** 单个 Spec 的去重贡献者统计 */
+export interface SpecContributorSummary {
+  /** 归一化去重键（优先小写 email，回退小写 authorName） */
+  contributorKey: string;
+  /** 展示作者名（取最近一次提交的名称） */
+  authorName: string;
+  /** 作者邮箱 */
+  authorEmail: string;
+  /** 是否为该 Spec 的创建者 */
+  isCreator: boolean;
+  /** 参与总提交次数 */
+  commitCount: number;
+  /** 最近一次提交时间 */
+  lastCommittedAt: string;
+  /** 已分析窗口内累计创建/新增/修改/重命名/移除功能点数 */
+  createdCount: number;
+  addedCount: number;
+  modifiedCount: number;
+  renamedCount: number;
+  removedCount: number;
+}
+
+/** 单个 Spec 的历史与贡献者分析响应 */
+export interface SpecHistoryResponse {
+  /** 仓库 ID */
+  repoId: string;
+  /** 能力路径 */
+  capabilityPath: string;
+  /** 目标 spec.md 相对其所属 Git 仓库根的路径 */
+  specFilePath: string;
+  /** 是否存在有效 Git 仓库与历史 */
+  isGitRepo: boolean;
+  /** 无历史时的降级提示原因 */
+  unavailableReason?: string;
+  /** 创建者（首次提交作者） */
+  creator?: SpecContributorSummary;
+  /** 全部去重贡献者列表 */
+  contributors: SpecContributorSummary[];
+  /** 逆序演进提交列表（最新在前） */
+  revisions: SpecRevisionEntry[];
+  /** 总提交次数 */
+  totalCommits: number;
+  /** 已执行语义快照分析的提交次数 */
+  analyzedCommits: number;
+  /** 是否因超过快照窗口上限而存在未展开语义对比的更早提交 */
+  truncated: boolean;
+}
+
 /** 单个仓库的 Git 状态摘要 */
 export interface GitRepoStatus {
   /** 仓库 ID */

@@ -18,6 +18,8 @@ import type {
   OpenSpecEnvironmentInfo,
   RepoBinding,
   RepoChangeEntry,
+  SpecRequirementChangeItem,
+  SpecRequirementChangeKind,
   TaskItem,
   TasksDocument,
   ToggleTaskInput,
@@ -210,18 +212,26 @@ export function applyTaskLineToggle(
   return parseTasksMarkdown(updatedContent, relPath, false);
 }
 
+interface DetailedRequirementBlock {
+  displayName: string;
+  rawBlock: string;
+}
+
 /**
- * 从规范全文中提取按 Requirement 名称索引的原文段落。
+ * 从规范全文中提取保留原始标题与原文段落的 Requirement 映射（键为规范化小写名称）。
  */
-export function extractRequirementsMap(markdown: string): Map<string, string> {
-  const map = new Map<string, string>();
+function extractDetailedRequirementsMap(markdown: string): Map<string, DetailedRequirementBlock> {
+  const map = new Map<string, DetailedRequirementBlock>();
   const lines = markdown.split(/\r?\n/);
   let currentName: string | null = null;
   let buffer: string[] = [];
 
   const flush = () => {
     if (currentName) {
-      map.set(normalizeReqHeader(currentName), buffer.join('\n').trim());
+      map.set(normalizeReqHeader(currentName), {
+        displayName: currentName,
+        rawBlock: buffer.join('\n').trim(),
+      });
     }
   };
 
@@ -247,8 +257,243 @@ export function extractRequirementsMap(markdown: string): Map<string, string> {
   return map;
 }
 
+/**
+ * 从规范全文中提取按 Requirement 名称索引的原文段落。
+ */
+export function extractRequirementsMap(markdown: string): Map<string, string> {
+  const detailed = extractDetailedRequirementsMap(markdown);
+  const map = new Map<string, string>();
+  for (const [key, item] of detailed.entries()) {
+    map.set(key, item.rawBlock);
+  }
+  return map;
+}
+
 function normalizeReqHeader(name: string): string {
   return name.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/** 规范化单条 Requirement 正文用于判定内容是否实质修改 */
+function normalizeRequirementText(rawBlock: string): string {
+  return rawBlock.replace(/\r\n/g, '\n').replace(/[ \t]+$/gm, '').trim();
+}
+
+/** 剥离 OpenSpec 模板固定词后提取中英文混合语义词元（用于重命名相似度匹配） */
+function tokenizeRequirementSemantics(rawBlock: string): Set<string> {
+  const lines = rawBlock.split(/\r?\n/);
+  // 去掉首行 `### Requirement: ...` 标题，避免标题完全改写拉低或干扰正文相似度
+  const bodyWithoutTitle = lines.length > 1 ? lines.slice(1).join('\n') : rawBlock;
+  const stripped = bodyWithoutTitle
+    .replace(/####\s+Scenario:\s*/gi, ' ')
+    .replace(/\bthe\s+system\s+shall\b/gi, ' ')
+    .replace(/\b(?:shall|should|must|may|when|then|and)\b/gi, ' ')
+    .replace(/[`*_#>\-\[\]()]/g, ' ')
+    .toLowerCase();
+
+  const tokens = new Set<string>();
+  const latinMatches = stripped.match(/[a-z0-9_]+/g) ?? [];
+  for (const word of latinMatches) {
+    if (word.length >= 2) {
+      tokens.add(word);
+    }
+  }
+
+  const cjkRuns = stripped.match(/[\u4e00-\u9fff]+/g) ?? [];
+  for (const run of cjkRuns) {
+    if (run.length === 1) {
+      tokens.add(run);
+      continue;
+    }
+    for (let i = 0; i < run.length - 1; i += 1) {
+      tokens.add(run.slice(i, i + 2));
+    }
+  }
+  return tokens;
+}
+
+/** 计算两个词元集合的 Dice 相似度系数（0~1） */
+function computeDiceSimilarity(a: Set<string>, b: Set<string>): number {
+  // 剥离模板词后词元过少时不做相似度推测，防止空壳需求误匹配
+  if (a.size < 2 || b.size < 2) {
+    return 0;
+  }
+  let intersection = 0;
+  for (const token of a) {
+    if (b.has(token)) {
+      intersection += 1;
+    }
+  }
+  return (2 * intersection) / (a.size + b.size);
+}
+
+/** Spec 相邻快照的 Requirement 语义差异对比结果 */
+export interface SpecSnapshotDiffResult {
+  operations: SpecRequirementChangeKind[];
+  changes: SpecRequirementChangeItem[];
+  counts: {
+    created: number;
+    added: number;
+    modified: number;
+    renamed: number;
+    removed: number;
+  };
+}
+
+/**
+ * 对比相邻两版 `spec.md` 的 Requirement 语义差异，区分创建、追加、修改、重命名、移除与纯文档修订。
+ *
+ * @param prevMarkdown 上一版本规范文本；传入 undefined 表示首次创建提交
+ * @param currMarkdown 当前版本规范文本
+ * @param options 可选同提交归档 Delta Spec 文本与相似度阈值
+ * @returns 结构化的操作类型集合、Requirement 变更清单与汇总计数
+ */
+export function compareSpecRequirementSnapshots(
+  prevMarkdown: string | undefined,
+  currMarkdown: string,
+  options: {
+    deltaSpecsRaw?: string[];
+    similarityThreshold?: number;
+  } = {},
+): SpecSnapshotDiffResult {
+  const currMap = extractDetailedRequirementsMap(currMarkdown);
+  const changes: SpecRequirementChangeItem[] = [];
+
+  if (prevMarkdown === undefined) {
+    for (const item of currMap.values()) {
+      changes.push({ operation: 'CREATED', name: item.displayName });
+    }
+    return {
+      operations: changes.length > 0 ? ['CREATED'] : ['DOCS_UPDATED'],
+      changes,
+      counts: {
+        created: changes.length,
+        added: 0,
+        modified: 0,
+        renamed: 0,
+        removed: 0,
+      },
+    };
+  }
+
+  const prevMap = extractDetailedRequirementsMap(prevMarkdown);
+  const addedKeys = new Set<string>();
+  const removedKeys = new Set<string>();
+  const modifiedItems: SpecRequirementChangeItem[] = [];
+
+  for (const [key, currItem] of currMap.entries()) {
+    const prevItem = prevMap.get(key);
+    if (!prevItem) {
+      addedKeys.add(key);
+    } else if (normalizeRequirementText(prevItem.rawBlock) !== normalizeRequirementText(currItem.rawBlock)) {
+      modifiedItems.push({ operation: 'MODIFIED', name: currItem.displayName });
+    }
+  }
+
+  for (const key of prevMap.keys()) {
+    if (!currMap.has(key)) {
+      removedKeys.add(key);
+    }
+  }
+
+  const renamedItems: SpecRequirementChangeItem[] = [];
+
+  // 1. 优先使用同提交内归档 Delta Spec 声明的 RENAMED FROM:/TO: 确定性映射
+  if (options.deltaSpecsRaw && options.deltaSpecsRaw.length > 0 && addedKeys.size > 0 && removedKeys.size > 0) {
+    for (const deltaRaw of options.deltaSpecsRaw) {
+      const parsedDelta = parseDeltaSpecDiff('delta', 'delta', deltaRaw);
+      for (const item of parsedDelta.items) {
+        if (item.operation !== 'RENAMED' || !item.fromName) {
+          continue;
+        }
+        const fromKey = normalizeReqHeader(item.fromName);
+        const toKey = normalizeReqHeader(item.name);
+        if (removedKeys.has(fromKey) && addedKeys.has(toKey)) {
+          const prevItem = prevMap.get(fromKey)!;
+          const currItem = currMap.get(toKey)!;
+          removedKeys.delete(fromKey);
+          addedKeys.delete(toKey);
+          renamedItems.push({
+            operation: 'RENAMED',
+            name: currItem.displayName,
+            fromName: prevItem.displayName,
+            matchSource: 'delta',
+          });
+        }
+      }
+    }
+  }
+
+  // 2. 兜底使用剥离模板词后的正文语义相似度做一对一贪心匹配
+  const threshold = options.similarityThreshold ?? 0.55;
+  if (removedKeys.size > 0 && addedKeys.size > 0) {
+    const prevTokens = new Map<string, Set<string>>();
+    const currTokens = new Map<string, Set<string>>();
+    for (const rKey of removedKeys) {
+      prevTokens.set(rKey, tokenizeRequirementSemantics(prevMap.get(rKey)!.rawBlock));
+    }
+    for (const aKey of addedKeys) {
+      currTokens.set(aKey, tokenizeRequirementSemantics(currMap.get(aKey)!.rawBlock));
+    }
+
+    const candidates: Array<{ rKey: string; aKey: string; score: number }> = [];
+    for (const rKey of removedKeys) {
+      const rSet = prevTokens.get(rKey)!;
+      for (const aKey of addedKeys) {
+        const score = computeDiceSimilarity(rSet, currTokens.get(aKey)!);
+        if (score >= threshold) {
+          candidates.push({ rKey, aKey, score });
+        }
+      }
+    }
+    candidates.sort((x, y) => y.score - x.score);
+
+    for (const candidate of candidates) {
+      if (!removedKeys.has(candidate.rKey) || !addedKeys.has(candidate.aKey)) {
+        continue;
+      }
+      removedKeys.delete(candidate.rKey);
+      addedKeys.delete(candidate.aKey);
+      renamedItems.push({
+        operation: 'RENAMED',
+        name: currMap.get(candidate.aKey)!.displayName,
+        fromName: prevMap.get(candidate.rKey)!.displayName,
+        matchSource: 'similarity',
+        similarity: Math.round(candidate.score * 100),
+      });
+    }
+  }
+
+  const addedItems: SpecRequirementChangeItem[] = [];
+  for (const aKey of addedKeys) {
+    addedItems.push({ operation: 'ADDED', name: currMap.get(aKey)!.displayName });
+  }
+
+  const removedItems: SpecRequirementChangeItem[] = [];
+  for (const rKey of removedKeys) {
+    removedItems.push({ operation: 'REMOVED', name: prevMap.get(rKey)!.displayName });
+  }
+
+  // 排序：移除告警靠前或按固定顺序展示，便于界面与测试保持确定性
+  changes.push(...addedItems, ...modifiedItems, ...renamedItems, ...removedItems);
+
+  const operations: SpecRequirementChangeKind[] = [];
+  if (addedItems.length > 0) operations.push('ADDED');
+  if (modifiedItems.length > 0) operations.push('MODIFIED');
+  if (renamedItems.length > 0) operations.push('RENAMED');
+  if (removedItems.length > 0) operations.push('REMOVED');
+  if (operations.length === 0) operations.push('DOCS_UPDATED');
+
+  return {
+    operations,
+    changes,
+    counts: {
+      created: 0,
+      added: addedItems.length,
+      modified: modifiedItems.length,
+      renamed: renamedItems.length,
+      removed: removedItems.length,
+    },
+  };
 }
 
 /**
@@ -274,11 +519,17 @@ export function parseDeltaSpecDiff(
     }
     const block = currentBuffer.join('\n').trim();
     if (currentOp === 'RENAMED') {
-      // 处理 FROM:/TO: 格式
-      const fromMatch = /FROM:\s*(?:###\s+Requirement:\s*)?(.+)/i.exec(block);
-      const toMatch = /TO:\s*(?:###\s+Requirement:\s*)?(.+)/i.exec(block);
-      const fromName = fromMatch?.[1].trim() ?? currentReqName;
-      const toName = toMatch?.[1].trim() ?? currentReqName;
+      // 处理 FROM:/TO: 格式（兼容反引号包裹与可选 `### Requirement:` 前缀）
+      const cleanRenamedTarget = (raw: string): string =>
+        raw
+          .trim()
+          .replace(/^`+|`+$/g, '')
+          .replace(/^###\s+Requirement:\s*/i, '')
+          .trim();
+      const fromMatch = /FROM:\s*(.+)/i.exec(block);
+      const toMatch = /TO:\s*(.+)/i.exec(block);
+      const fromName = fromMatch ? cleanRenamedTarget(fromMatch[1]) : currentReqName;
+      const toName = toMatch ? cleanRenamedTarget(toMatch[1]) : currentReqName;
       items.push({
         operation: 'RENAMED',
         name: toName,

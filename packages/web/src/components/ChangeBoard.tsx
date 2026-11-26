@@ -40,6 +40,7 @@ import {
   formatArchiveTime,
 } from '../utils/formatArchiveTime';
 import { MarkdownViewer } from './MarkdownViewer';
+import { SpecHistoryPanel } from './SpecHistoryPanel';
 
 interface ChangeBoardProps {
   workspace: Workspace;
@@ -1190,6 +1191,11 @@ export function ChangeBoard({
                     <CheckCircle2 className="h-3.5 w-3.5" /> {selectedMainSpec.requirementCount} Requirements
                   </span>
                 </div>
+                <SpecHistoryPanel
+                  key={`${selectedMainSpec.repoId}:${selectedMainSpec.capabilityPath}`}
+                  repoId={selectedMainSpec.repoId}
+                  capabilityPath={selectedMainSpec.capabilityPath}
+                />
                 <div className="max-h-[70vh] overflow-auto">
                   <MarkdownViewer
                     content={selectedMainSpec.rawContent}

@@ -21,6 +21,7 @@ import type {
   RegistryStoreData,
   RepoBinding,
   SetBranchPinInput,
+  SpecHistoryResponse,
   TasksDocument,
   ToggleTaskInput,
   UpdateIdeaInput,
@@ -300,6 +301,14 @@ export const api = {
   getRepoDiff(repoId: string, target: string): Promise<GitDiffResult> {
     const params = new URLSearchParams({ target });
     return requestJson(`/api/repos/${repoId}/git/diff?${params.toString()}`);
+  },
+
+  getSpecHistory(repoId: string, capabilityPath: string, limit = 20): Promise<SpecHistoryResponse> {
+    const params = new URLSearchParams({
+      capabilityPath,
+      limit: String(limit),
+    });
+    return requestJson(`/api/repos/${repoId}/specs/history?${params.toString()}`, {}, 20_000);
   },
 
   checkoutBranch(repoId: string, branch: string): Promise<{ status: GitRepoStatus }> {

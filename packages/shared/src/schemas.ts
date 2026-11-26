@@ -126,6 +126,12 @@ export const UpdateWorkspaceOrderInputSchema = z.object({
   ideaOrder: z.array(z.string().min(1)).optional(),
 });
 
+/** Spec 演进历史查询参数 Schema */
+export const SpecHistoryQuerySchema = z.object({
+  capabilityPath: z.string().trim().min(1).max(240),
+  limit: z.coerce.number().int().min(1).max(40).default(20),
+});
+
 export type AddRepoInput = z.infer<typeof AddRepoInputSchema>;
 export type CreateWorkspaceInput = z.infer<typeof CreateWorkspaceInputSchema>;
 export type UpdateWorkspaceInput = z.infer<typeof UpdateWorkspaceInputSchema>;
@@ -138,3 +144,4 @@ export type ScanDirectoryInput = z.infer<typeof ScanDirectoryInputSchema>;
 export type CreateIdeaInput = z.infer<typeof CreateIdeaInputSchema>;
 export type UpdateIdeaInput = z.infer<typeof UpdateIdeaInputSchema>;
 export type UpdateWorkspaceOrderInput = z.infer<typeof UpdateWorkspaceOrderInputSchema>;
+export type SpecHistoryQuery = z.infer<typeof SpecHistoryQuerySchema>;
