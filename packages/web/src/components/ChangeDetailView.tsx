@@ -503,8 +503,8 @@ export function ChangeDetailView({
         aria-describedby={undefined}
         className={`flex flex-col overflow-hidden border-border-strong bg-card p-0 shadow-2xl ${
           isFullscreen
-            ? 'h-screen w-screen max-w-none rounded-none border-0'
-            : 'h-[92vh] w-[96vw] max-w-[1600px] rounded-2xl'
+            ? 'h-screen w-screen max-w-none rounded-none border-0 sm:max-w-none'
+            : 'h-[92vh] w-[96vw] max-w-[1600px] rounded-2xl sm:max-w-[1600px]'
         }`}
       >
         <DialogHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3.5">
