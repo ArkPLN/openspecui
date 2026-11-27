@@ -1,8 +1,3 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { once } from 'node:events';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import type {
   CrossRepoChangeGroup,
   RepoBinding,
@@ -12,14 +7,13 @@ import type {
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { api } from '../api';
-import { ChangeBoard } from './ChangeBoard';
+import { api } from '@/api';
+import { ChangeBoard } from '@/components/ChangeBoard';
+import { testConfig } from '#test/config';
+import { allocTempDir, cleanupTempDirs, createLocalWorkspace, makeDir } from '#test/e2e/fixtures';
+import { startTestServer, type TestServer } from '#test/e2e/server';
 
-let serverProcess: ChildProcess | null = null;
-let appHomeDir = '';
-let baseUrl = '';
-let originalFetch: typeof fetch;
-let originalResizeObserver: typeof ResizeObserver | undefined;
+let testServer: TestServer | null = null;
 let workspace: Workspace;
 let changeGroups: CrossRepoChangeGroup[];
 
@@ -140,96 +134,24 @@ function setRect(element: Element, top: number) {
 }
 
 beforeAll(async () => {
-  originalResizeObserver = globalThis.ResizeObserver;
-  if (!originalResizeObserver) {
-    globalThis.ResizeObserver = class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    } as typeof ResizeObserver;
-  }
-  const tempRoot = process.platform === 'win32' && fs.existsSync('E:\\TEMP\\opencode')
-    ? 'E:\\TEMP\\opencode'
-    : os.tmpdir();
-  fs.mkdirSync(tempRoot, { recursive: true });
-  appHomeDir = fs.mkdtempSync(path.join(tempRoot, 'openspecui-change-board-'));
-  const frontendPath = path.join(appHomeDir, 'frontend');
-  const backendPath = path.join(appHomeDir, 'backend');
-  fs.mkdirSync(frontendPath);
-  fs.mkdirSync(backendPath);
+  const fixtureRoot = allocTempDir('change-board-fixtures-');
+  const frontendPath = makeDir(fixtureRoot, 'frontend');
+  const backendPath = makeDir(fixtureRoot, 'backend');
 
-  const helperPath = path.resolve(process.cwd(), 'test/change-board-server.ts');
-  const repoRoot = path.resolve(path.dirname(helperPath), '../../..');
-  serverProcess = spawn(process.execPath, ['--import', 'tsx', helperPath, appHomeDir], {
-    cwd: repoRoot,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true,
-  });
-  let stderr = '';
-  serverProcess.stderr?.on('data', (chunk) => {
-    stderr += String(chunk);
-  });
-
-  const startup = new Promise<{ port: number }>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error(`测试服务启动超时：${stderr}`)), 20_000);
-    serverProcess?.stdout?.on('data', (chunk) => {
-      const text = String(chunk);
-      const marker = 'OPENSPECUI_TEST_SERVER=';
-      const markerIndex = text.indexOf(marker);
-      if (markerIndex === -1) return;
-      const payload = text.slice(markerIndex + marker.length).split('\n')[0];
-      clearTimeout(timeout);
-      resolve(JSON.parse(payload) as { port: number });
-    });
-    serverProcess?.once('error', (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    serverProcess?.once('exit', (code) => {
-      clearTimeout(timeout);
-      reject(new Error(`测试服务提前退出（${code}）：${stderr}`));
-    });
-  });
-  const { port } = await startup;
-  baseUrl = `http://127.0.0.1:${port}`;
-  originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const inputUrl = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    const url = new URL(inputUrl, baseUrl);
-    if (input instanceof Request) {
-      return originalFetch(new Request(url, input), init);
-    }
-    return originalFetch(url, init);
-  }) as typeof fetch;
-
+  testServer = await startTestServer();
   await api.initSession();
-  workspace = await api.createWorkspace({
-    name: 'ChangeBoard 集成测试',
-    repos: [
-      { name: '前端仓库', role: 'FE', kind: 'code', sourceType: 'local', localPath: frontendPath },
-      { name: '后端仓库', role: 'BE', kind: 'code', sourceType: 'local', localPath: backendPath },
-    ],
-  });
+  workspace = await createLocalWorkspace(api, 'ChangeBoard 集成测试', [
+    { directory: frontendPath, role: 'FE', name: '前端仓库' },
+    { directory: backendPath, role: 'BE', name: '后端仓库' },
+  ]);
   changeGroups = makeGroups(workspace);
-}, 30_000);
+}, testConfig.startupTimeoutMs);
 
 afterAll(async () => {
-  globalThis.fetch = originalFetch;
-  if (originalResizeObserver) {
-    (globalThis as unknown as { ResizeObserver: typeof ResizeObserver }).ResizeObserver =
-      originalResizeObserver;
-  } else {
-    delete (globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver;
-  }
-  if (serverProcess && serverProcess.exitCode === null) {
-    const exited = once(serverProcess, 'exit');
-    serverProcess.kill();
-    await exited;
-  }
-  if (appHomeDir) {
-    fs.rmSync(appHomeDir, { recursive: true, force: true });
-  }
-});
+  await testServer?.cleanup();
+  testServer = null;
+  cleanupTempDirs();
+}, testConfig.startupTimeoutMs);
 
 describe('ChangeBoard shadcn 与 dnd-kit 集成', () => {
   it('切换 Board、Archive 和 Specs 标签页并保持归档倒序', async () => {

@@ -2,13 +2,14 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { page } from 'vitest/browser';
-import { Button } from '../ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Checkbox } from '../ui/checkbox';
-import { Field, FieldDescription, FieldLabel } from '../ui/field';
-import { Input } from '../ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Textarea } from '../ui/textarea';
+import { testConfig } from '#test/config';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -71,7 +72,7 @@ for (const theme of ['dark', 'light'] as const) {
     const viewportLabel = window.innerWidth < 768 ? 'mobile' : 'desktop';
     await expect.element(page.getByText('新建逻辑工作区')).toMatchScreenshot(`workspace-forms-${theme}-${viewportLabel}`, {
       comparatorName: 'pixelmatch',
-      comparatorOptions: { allowedMismatchedPixelRatio: 0.01 },
+      comparatorOptions: { allowedMismatchedPixelRatio: testConfig.vrtMismatchedPixelRatio },
     });
   });
 }

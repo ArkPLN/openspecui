@@ -3,9 +3,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { page } from 'vitest/browser';
-import { ContributorBadge } from '../history/ContributorBadge';
-import { BranchSelect } from './BranchSelect';
-import { CommitTimeline } from './CommitTimeline';
+import { testConfig } from '#test/config';
+import { ContributorBadge } from '@/components/history/ContributorBadge';
+import { BranchSelect } from '@/components/git/BranchSelect';
+import { CommitTimeline } from '@/components/git/CommitTimeline';
 
 const status: GitRepoStatus = {
   repoId: 'repo-1',
@@ -80,7 +81,7 @@ for (const theme of ['dark', 'light'] as const) {
     const viewportLabel = window.innerWidth < 768 ? 'mobile' : 'desktop';
     await expect.element(page.getByText('跨仓混合 Git 活动时间线')).toMatchScreenshot(`git-views-${theme}-${viewportLabel}`, {
       comparatorName: 'pixelmatch',
-      comparatorOptions: { allowedMismatchedPixelRatio: 0.01 },
+      comparatorOptions: { allowedMismatchedPixelRatio: testConfig.vrtMismatchedPixelRatio },
     });
   });
 }

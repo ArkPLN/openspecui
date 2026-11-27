@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARTIFACT_STATUS_META, DELTA_STATUS_META, getRepoColorClass, STAGE_META } from './status';
+import { ARTIFACT_STATUS_META, DELTA_STATUS_META, getRepoColorClass, STAGE_META } from '@/lib/status';
 
 describe('status mappings', () => {
   it('preserves every lifecycle stage', () => {

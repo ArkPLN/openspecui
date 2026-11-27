@@ -2,7 +2,7 @@ import type { GitDiffResult } from '@openspecui/shared';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { DiffViewer } from '../DiffViewer';
+import { DiffViewer } from '@/components/DiffViewer';
 
 const longLine = `+${'x'.repeat(320)}`;
 

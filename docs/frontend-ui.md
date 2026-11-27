@@ -85,9 +85,15 @@ npm run test:web
 
 | 项目 | 匹配 | 环境 | 用途 |
 | --- | --- | --- | --- |
-| `unit` | `**/*.unit.test.ts` | `node` | 主题、状态映射、归档排序、Diff 行生成 |
-| `integration` | `**/*.integration.test.tsx` | `jsdom` | 真实组件渲染、用户交互、键盘、只读（Testing Library + user-event + jest-dom） |
-| `vrt` | `**/*.vrt.test.tsx` | Browser Mode + Playwright Chromium | 浅色/深色 × 桌面/移动截图对比 |
+| `unit` | `test/unit/**/*.unit.test.ts` | `node` | 主题、状态映射、归档排序、Diff 行生成 |
+| `integration` | `test/integration/**/*.integration.test.tsx` | `jsdom` | 真实组件渲染、用户交互、键盘、只读（Testing Library + user-event + jest-dom） |
+| `vrt` | `test/vrt/**/*.vrt.test.tsx` | Browser Mode + Playwright Chromium | 浅色/深色 × 桌面/移动截图对比 |
+
+测试与源码分离：测试按业务域存放在 `packages/web/test/{unit,integration,vrt}/<domain>/`，
+真实机器交互（服务启停、临时目录、git 建仓）收敛在 `packages/web/test/e2e/`，
+测试描述文件不得直接引用 `node:` 内建模块、硬编码本机路径或字面量配置。
+统一配置入口为 `packages/web/test/config.ts`（经 `packages/web/.env` 覆盖，
+见 `packages/web/.env.example`，`.env` 本身不提交），超时、视口、阈值一律引用该配置。
 
 集成测试不得 mock API 或伪造实现。Git 相关测试启动真实 Fastify 服务并操作真实 Git 仓库。
 

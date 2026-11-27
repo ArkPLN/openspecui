@@ -2,7 +2,7 @@ import type { TaskItem } from '@openspecui/shared';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { MarkdownViewer } from '../MarkdownViewer';
+import { MarkdownViewer } from '@/components/MarkdownViewer';
 
 const taskContent = [
   '# 任务',

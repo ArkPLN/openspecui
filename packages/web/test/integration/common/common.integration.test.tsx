@@ -1,12 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { EmptyState } from './EmptyState';
-import { IconButton } from './IconButton';
-import { InlineAlert } from './InlineAlert';
-import { LoadingState } from './LoadingState';
-import { StatusBadge } from './StatusBadge';
-import { STAGE_META } from '../../lib/status';
+import { EmptyState } from '@/components/common/EmptyState';
+import { IconButton } from '@/components/common/IconButton';
+import { InlineAlert } from '@/components/common/InlineAlert';
+import { LoadingState } from '@/components/common/LoadingState';
+import { StatusBadge } from '@/components/common/StatusBadge';
+import { STAGE_META } from '@/lib/status';
 
 describe('common components', () => {
   beforeEach(() => {

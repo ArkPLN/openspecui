@@ -2,9 +2,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { page } from 'vitest/browser';
-import { EmptyState } from '../common/EmptyState';
-import { InlineAlert } from '../common/InlineAlert';
-import { ReadOnlyBanner } from './ReadOnlyBanner';
+import { testConfig } from '#test/config';
+import { EmptyState } from '@/components/common/EmptyState';
+import { InlineAlert } from '@/components/common/InlineAlert';
+import { ReadOnlyBanner } from '@/components/layout/ReadOnlyBanner';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -38,7 +39,7 @@ for (const theme of ['dark', 'light'] as const) {
     const viewportLabel = window.innerWidth < 768 ? 'mobile' : 'desktop';
     await expect.element(page.getByText('欢迎使用 OpenSpecUI')).toMatchScreenshot(`app-shell-${theme}-${viewportLabel}`, {
       comparatorName: 'pixelmatch',
-      comparatorOptions: { allowedMismatchedPixelRatio: 0.01 },
+      comparatorOptions: { allowedMismatchedPixelRatio: testConfig.vrtMismatchedPixelRatio },
     });
   });
 }

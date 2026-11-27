@@ -1,22 +1,15 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import type { OpenSpecEnvironmentInfo, Workspace, WorkspaceIdea } from '@openspecui/shared';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createWorkbenchServer, type WorkbenchServerInstance } from '../../../../server/src/server';
 import { api } from '@/api';
 import { IdeaModal } from '@/components/IdeaModal';
 import { LocalFolderPickerModal } from '@/components/LocalFolderPickerModal';
 import { WorkspaceModal } from '@/components/WorkspaceModal';
-
-class ResizeObserverPolyfill {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
+import { testConfig } from '#test/config';
+import { allocTempDir, cleanupTempDirs, makeDir } from '#test/e2e/fixtures';
+import { startTestServer, type TestServer } from '#test/e2e/server';
 
 const emptyEnv: OpenSpecEnvironmentInfo = {
   cliAvailable: false,
@@ -24,26 +17,11 @@ const emptyEnv: OpenSpecEnvironmentInfo = {
   worksets: [],
 };
 
-const nativeFetch = globalThis.fetch;
-const tempDirs: string[] = [];
-let server: WorkbenchServerInstance | undefined;
-let serverBaseUrl = '';
+let testServer: TestServer | null = null;
 let workspace: Workspace;
 let repoDir: string;
 let secondRepoDir: string;
 let emptyDir: string;
-
-function makeTempDir(prefix: string): string {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-  tempDirs.push(directory);
-  return directory;
-}
-
-function makeRepo(parent: string, name: string): string {
-  const directory = path.join(parent, name);
-  fs.mkdirSync(path.join(directory, 'openspec'), { recursive: true });
-  return directory;
-}
 
 async function listIdeas(workspaceId: string): Promise<WorkspaceIdea[]> {
   const registry = await api.listWorkspaces();
@@ -86,33 +64,12 @@ function WorkspaceLauncher({ onClose, onCompleted }: WorkspaceLauncherProps) {
 }
 
 beforeAll(async () => {
-  Object.defineProperty(globalThis, 'ResizeObserver', {
-    configurable: true,
-    value: ResizeObserverPolyfill,
-  });
-  HTMLElement.prototype.hasPointerCapture = () => false;
-  HTMLElement.prototype.setPointerCapture = () => {};
-  HTMLElement.prototype.releasePointerCapture = () => {};
-  HTMLElement.prototype.scrollIntoView = () => {};
+  const fixtureRoot = allocTempDir('web-modal-fixtures-');
+  repoDir = makeDir(fixtureRoot, 'project-a', true);
+  secondRepoDir = makeDir(fixtureRoot, 'project-b', true);
+  emptyDir = makeDir(fixtureRoot, 'empty-folder');
 
-  const appHomeDir = makeTempDir('openspecui-web-modal-home-');
-  const fixtureRoot = makeTempDir('openspecui-web-modal-fixtures-');
-  repoDir = makeRepo(fixtureRoot, 'project-a');
-  secondRepoDir = makeRepo(fixtureRoot, 'project-b');
-  emptyDir = path.join(fixtureRoot, 'empty-folder');
-  fs.mkdirSync(emptyDir);
-
-  server = await createWorkbenchServer({ port: 0, appHomeDir });
-  serverBaseUrl = `http://127.0.0.1:${server.port}`;
-
-  // 将前端相对地址转发到真实测试服务器，保留实际 HTTP 请求与响应。
-  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-    const requestUrl = input instanceof URL
-      ? input
-      : new URL(typeof input === 'string' ? input : input.url, serverBaseUrl);
-    return nativeFetch(requestUrl, init);
-  }) as typeof fetch;
-
+  testServer = await startTestServer();
   await api.initSession();
   workspace = await api.createWorkspace({
     name: '弹窗集成测试工作区',
@@ -126,16 +83,13 @@ beforeAll(async () => {
       },
     ],
   });
-}, 20_000);
+}, testConfig.startupTimeoutMs);
 
 afterAll(async () => {
-  globalThis.fetch = nativeFetch;
-  await server?.close();
-  while (tempDirs.length > 0) {
-    const directory = tempDirs.pop();
-    if (directory) fs.rmSync(directory, { recursive: true, force: true });
-  }
-}, 20_000);
+  await testServer?.cleanup();
+  testServer = null;
+  cleanupTempDirs();
+}, testConfig.startupTimeoutMs);
 
 describe('WorkspaceModal', () => {
   it('使用 Escape 关闭工作区弹窗并恢复触发按钮焦点', async () => {

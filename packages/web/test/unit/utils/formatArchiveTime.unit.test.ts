@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareArchivedEntriesDesc, formatArchiveTime, getArchiveSortTimestamp } from './formatArchiveTime';
+import { compareArchivedEntriesDesc, formatArchiveTime, getArchiveSortTimestamp } from '@/utils/formatArchiveTime';
 
 describe('archive time helpers', () => {
   it('formats a date-only archive entry', () => {

@@ -2,12 +2,13 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { page } from 'vitest/browser';
-import { STAGE_META } from '../../lib/status';
-import { StatusBadge } from '../common/StatusBadge';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Progress } from '../ui/progress';
-import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
-import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
+import { testConfig } from '#test/config';
+import { STAGE_META } from '@/lib/status';
+import { StatusBadge } from '@/components/common/StatusBadge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -61,7 +62,7 @@ for (const theme of ['dark', 'light'] as const) {
     const viewportLabel = window.innerWidth < 768 ? 'mobile' : 'desktop';
     await expect.element(page.getByText('联合变更')).toMatchScreenshot(`board-views-${theme}-${viewportLabel}`, {
       comparatorName: 'pixelmatch',
-      comparatorOptions: { allowedMismatchedPixelRatio: 0.01 },
+      comparatorOptions: { allowedMismatchedPixelRatio: testConfig.vrtMismatchedPixelRatio },
     });
   });
 }

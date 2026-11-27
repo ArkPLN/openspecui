@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '#test': fileURLToPath(new URL('./test', import.meta.url)),
     },
   },
   test: {
@@ -16,15 +17,15 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['src/**/*.unit.test.ts'],
+          include: ['test/unit/**/*.unit.test.ts'],
         },
       },
       {
         test: {
           name: 'integration',
           environment: 'jsdom',
-          setupFiles: ['./vitest.setup.ts'],
-          include: ['src/**/*.integration.test.tsx'],
+          setupFiles: ['./vitest.setup.ts', './test/setup.integration.ts'],
+          include: ['test/integration/**/*.integration.test.tsx'],
         },
       },
       {
@@ -39,7 +40,7 @@ export default defineConfig({
               { browser: 'chromium', name: 'mobile', viewport: { width: 390, height: 844 } },
             ],
           },
-          include: ['src/**/*.vrt.test.tsx'],
+          include: ['test/vrt/**/*.vrt.test.tsx'],
         },
       },
     ],

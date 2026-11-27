@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildSplitRows } from '../../lib/diff';
+import { buildSplitRows } from '@/lib/diff';
 import {
   DIFF_STATUS_BADGE_CLASS_NAMES,
   getSplitDiffCellClassName,
   getUnifiedDiffLineClassName,
   getUnifiedDiffLineKind,
-} from './diffStyles';
+} from '@/components/diff/diffStyles';
 
 describe('Diff pure logic', () => {
   it('classifies unified diff lines without treating file headers as changes', () => {

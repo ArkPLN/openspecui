@@ -3,8 +3,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { page } from 'vitest/browser';
-import { DiffViewer } from '../DiffViewer';
-import { MarkdownViewer } from '../MarkdownViewer';
+import { testConfig } from '#test/config';
+import { DiffViewer } from '@/components/DiffViewer';
+import { MarkdownViewer } from '@/components/MarkdownViewer';
 
 const sampleDiff: GitDiffResult = {
   repoId: 'repo-1',
@@ -51,7 +52,7 @@ for (const theme of ['dark', 'light'] as const) {
     const viewportLabel = window.innerWidth < 768 ? 'mobile' : 'desktop';
     await expect.element(page.getByText('Proposal')).toMatchScreenshot(`detail-views-${theme}-${viewportLabel}`, {
       comparatorName: 'pixelmatch',
-      comparatorOptions: { allowedMismatchedPixelRatio: 0.01 },
+      comparatorOptions: { allowedMismatchedPixelRatio: testConfig.vrtMismatchedPixelRatio },
     });
   });
 }

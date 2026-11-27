@@ -2,11 +2,12 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { expect, test } from 'vitest';
 import { page } from 'vitest/browser';
-import { Button } from '../ui/button';
-import { EmptyState } from './EmptyState';
-import { InlineAlert } from './InlineAlert';
-import { StatusBadge } from './StatusBadge';
-import { STAGE_META } from '../../lib/status';
+import { testConfig } from '#test/config';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/common/EmptyState';
+import { InlineAlert } from '@/components/common/InlineAlert';
+import { StatusBadge } from '@/components/common/StatusBadge';
+import { STAGE_META } from '@/lib/status';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -39,7 +40,7 @@ for (const theme of ['dark', 'light'] as const) {
     const viewportLabel = window.innerWidth < 768 ? 'mobile' : 'desktop';
     await expect.element(page.getByText('No changes')).toMatchScreenshot(`common-${theme}-${viewportLabel}`, {
       comparatorName: 'pixelmatch',
-      comparatorOptions: { allowedMismatchedPixelRatio: 0.01 },
+      comparatorOptions: { allowedMismatchedPixelRatio: testConfig.vrtMismatchedPixelRatio },
     });
   });
 }

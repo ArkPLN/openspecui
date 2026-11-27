@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isDarkTheme, resolveTheme, THEME_STORAGE_KEY } from './theme';
+import { isDarkTheme, resolveTheme, THEME_STORAGE_KEY } from '@/lib/theme';
 
 describe('theme', () => {
   it('keeps the existing storage key', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSplitRows } from './diff';
+import { buildSplitRows } from '@/lib/diff';
 
 describe('buildSplitRows', () => {
   it('pairs deleted and added lines', () => {
