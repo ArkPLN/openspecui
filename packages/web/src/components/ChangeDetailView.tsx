@@ -507,7 +507,7 @@ export function ChangeDetailView({
             : 'h-[92vh] w-[96vw] max-w-[1600px] rounded-2xl sm:max-w-[1600px]'
         }`}
       >
-        <DialogHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+        <DialogHeader className="flex flex-row flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3.5">
           <div className="min-w-0">
             <DialogTitle className="mt-0.5 truncate text-lg font-semibold">{group.title}</DialogTitle>
             <DialogDescription className="flex flex-wrap items-center gap-2 text-xs">
