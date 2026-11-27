@@ -40,6 +40,8 @@ export const testConfig = {
   startupTimeoutMs: readNumber('OPENSPECUI_TEST_STARTUP_TIMEOUT_MS', 30_000),
   /** 单个用例超时（耗时交互场景） */
   caseTimeoutMs: readNumber('OPENSPECUI_TEST_CASE_TIMEOUT_MS', 30_000),
+  /** Testing Library 查询等待超时（真实 git/API 往返场景默认 1 秒过紧） */
+  findTimeoutMs: readNumber('OPENSPECUI_TEST_FIND_TIMEOUT_MS', 10_000),
   /** 临时目录名前缀 */
   tmpPrefix: readString('OPENSPECUI_TEST_TMP_PREFIX', 'openspecui-web-test-'),
   /** 可视化回归桌面视口宽度 */

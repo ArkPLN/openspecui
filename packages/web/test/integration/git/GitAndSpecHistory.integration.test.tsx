@@ -373,12 +373,20 @@ describe('SpecHistoryPanel 真实 API 集成', () => {
     const workspace = await createLocalWorkspace(api, 'spec-pagination-workspace', [{ directory, role: 'BE' }]);
     render(<SpecHistoryPanel repoId={workspace.repos[0].id} capabilityPath="auth" />);
 
-    const loadMore = await screen.findByRole('button', {
-      name: '加载更多早期提交（最多分析最近 40 次）',
-    });
+    const loadMore = await screen.findByRole(
+      'button',
+      {
+        name: '加载更多早期提交（最多分析最近 40 次）',
+      },
+      { timeout: testConfig.findTimeoutMs },
+    );
     expect(screen.queryByText('feat(spec): create paginated spec')).not.toBeInTheDocument();
     await userEvent.setup().click(loadMore);
-    expect(await screen.findByText('feat(spec): create paginated spec')).toBeInTheDocument();
+    expect(
+      await screen.findByText('feat(spec): create paginated spec', undefined, {
+        timeout: testConfig.findTimeoutMs,
+      }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: '加载更多早期提交（最多分析最近 40 次）' }),
     ).not.toBeInTheDocument();
